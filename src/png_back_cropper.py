@@ -6,25 +6,22 @@ from tqdm import tqdm
 # =========================================================
 # SCRIPT NAME
 # =========================================================
-# bulk_back_bg_merger.py
+# bulk_back_cropper.py
 #
 # WHAT IT DOES:
-# - Takes a BACKGROUND image as input
 # - Reads multiple folders from INPUT_FOLDER
 # - Each folder must contain:
 #       back.png
 #
-# - Resizes back.png to 950 x 1520 px
-# - Places it on background image
-# - Placement offset:
-#       X = 10 px
-#       Y = 50 px
-#
-# - Saves result in OUTPUT_FOLDER
+# - Crops 4 px from ALL SIDES
+# - Saves output to OUTPUT_FOLDER
 # - Replicates original folder structure
 #
-# BACKGROUND SIZE:
-# 1003 x 1568 px
+# ORIGINAL IMAGE SIZE:
+# 637 x 1005 px
+#
+# OUTPUT IMAGE SIZE:
+# 629 x 997 px
 #
 # =========================================================
 
@@ -32,65 +29,56 @@ from tqdm import tqdm
 # USER INPUT
 # =========================================================
 
-BG_IMAGE_PATH = Path("/home/vikram/dev/harry-graphics-scripts/in/bgback3.png")
+INPUT_FOLDER = Path("/home/vikram/dev/harry-graphics-scripts/out/jaipurGirls1-priview/")
 
-INPUT_FOLDER = Path("/home/vikram/dev/harry-graphics-scripts/out/UDAIPURWATI/")
-
-OUTPUT_FOLDER = Path("/home/vikram/dev/harry-graphics-scripts/outbg/UDAIPURWATI/")
+OUTPUT_FOLDER = Path(
+    "/home/vikram/dev/harry-graphics-scripts/outbg/jaipurGirls1-priview/"
+)
 
 # =========================================================
 # SETTINGS
 # =========================================================
 
-# Background size
+EXPECTED_WIDTH = 1547
+EXPECTED_HEIGHT = 2481
 
-BG_WIDTH = 1003
-BG_HEIGHT = 1600
+CROP_LEFT = 10
+CROP_RIGHT = 10
+CROP_TOP = 88
+CROP_BOTTOM = 88
 
-# Back image stretched size
+OUTPUT_WIDTH = EXPECTED_WIDTH - CROP_LEFT - CROP_RIGHT
 
-BACK_WIDTH = 950
-BACK_HEIGHT = 1520
-
-# Placement position
-
-PASTE_X = 20
-PASTE_Y = 45
+OUTPUT_HEIGHT = EXPECTED_HEIGHT - CROP_TOP - CROP_BOTTOM
 
 # =========================================================
 # DISPLAY SETTINGS
 # =========================================================
 
 print("\n" + "=" * 70)
-print("BULK BACK + BACKGROUND MERGER")
+print("BULK back.png ALL SIDE CROPPER")
 print("=" * 70)
 
-print(f"BACKGROUND IMAGE    : {BG_IMAGE_PATH}")
 print(f"INPUT FOLDER        : {INPUT_FOLDER}")
 print(f"OUTPUT FOLDER       : {OUTPUT_FOLDER}")
 
-print("\nBACKGROUND SIZE")
-print(f"{BG_WIDTH} x {BG_HEIGHT} px")
+print("\nORIGINAL SIZE")
+print(f"{EXPECTED_WIDTH} x {EXPECTED_HEIGHT} px")
 
-print("\nBACK SIZE")
-print(f"{BACK_WIDTH} x {BACK_HEIGHT} px")
+print("\nCROP SETTINGS")
+print(f"LEFT                : {CROP_LEFT} px")
+print(f"RIGHT               : {CROP_RIGHT} px")
+print(f"TOP                 : {CROP_TOP} px")
+print(f"BOTTOM              : {CROP_BOTTOM} px")
 
-print("\nPLACEMENT")
-print(f"X OFFSET            : {PASTE_X} px")
-print(f"Y OFFSET            : {PASTE_Y} px")
+print("\nOUTPUT SIZE")
+print(f"{OUTPUT_WIDTH} x {OUTPUT_HEIGHT} px")
 
 print("=" * 70)
 
 # =========================================================
 # VALIDATION
 # =========================================================
-
-bg_path = Path(BG_IMAGE_PATH)
-
-if not bg_path.exists():
-    print("\nERROR: Background image does not exist.")
-    input("Press ENTER to exit...")
-    raise SystemExit
 
 if not INPUT_FOLDER.exists():
     print("\nERROR: Input folder does not exist.")
@@ -100,24 +88,7 @@ if not INPUT_FOLDER.exists():
 OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # =========================================================
-# LOAD BACKGROUND IMAGE
-# =========================================================
-
-bg_img = cv2.imread(str(bg_path), cv2.IMREAD_COLOR)
-
-if bg_img is None:
-    print("\nERROR: Could not read background image.")
-    input("Press ENTER to exit...")
-    raise SystemExit
-
-# ---------------------------------------------------------
-# FORCE BACKGROUND SIZE
-# ---------------------------------------------------------
-
-bg_img = cv2.resize(bg_img, (BG_WIDTH, BG_HEIGHT), interpolation=cv2.INTER_LINEAR)
-
-# =========================================================
-# GET ALL SUBFOLDERS
+# GET SUBFOLDERS
 # =========================================================
 
 subfolders = [folder for folder in INPUT_FOLDER.iterdir() if folder.is_dir()]
@@ -145,60 +116,57 @@ failed = 0
 for folder in tqdm(subfolders, desc="Processing", unit="folder"):
     try:
         # -------------------------------------------------
-        # BACK IMAGE
+        # INPUT FILE
         # -------------------------------------------------
 
-        back_path = folder / "back.png"
+        input_image = folder / "back.png"
 
-        if not back_path.exists():
+        if not input_image.exists():
             tqdm.write(f"Missing back.png : {folder.name}")
 
             skipped += 1
             continue
 
         # -------------------------------------------------
-        # LOAD BACK IMAGE
+        # LOAD IMAGE
         # -------------------------------------------------
 
-        back_img = cv2.imread(str(back_path), cv2.IMREAD_COLOR)
+        img = cv2.imread(str(input_image), cv2.IMREAD_COLOR)
 
-        if back_img is None:
-            tqdm.write(f"Could not read : {back_path}")
+        if img is None:
+            tqdm.write(f"Could not read : {input_image}")
 
             failed += 1
             continue
 
         # -------------------------------------------------
-        # STRETCH BACK IMAGE
+        # IMAGE SIZE
         # -------------------------------------------------
 
-        back_img = cv2.resize(
-            back_img, (BACK_WIDTH, BACK_HEIGHT), interpolation=cv2.INTER_LINEAR
-        )
+        height, width = img.shape[:2]
 
         # -------------------------------------------------
-        # COPY BACKGROUND
+        # VALIDATE SIZE
         # -------------------------------------------------
 
-        final_img = bg_img.copy()
+        if width != EXPECTED_WIDTH or height != EXPECTED_HEIGHT:
+            tqdm.write(f"Unexpected size in {folder.name} : {width}x{height}")
 
         # -------------------------------------------------
         # SAFETY CHECK
         # -------------------------------------------------
 
-        if PASTE_X + BACK_WIDTH > BG_WIDTH or PASTE_Y + BACK_HEIGHT > BG_HEIGHT:
-            tqdm.write(f"Back image exceeds background : {folder.name}")
+        if width <= (CROP_LEFT + CROP_RIGHT) or height <= (CROP_TOP + CROP_BOTTOM):
+            tqdm.write(f"Image too small : {folder.name}")
 
             failed += 1
             continue
 
         # -------------------------------------------------
-        # PASTE BACK IMAGE
+        # CROP IMAGE
         # -------------------------------------------------
 
-        final_img[PASTE_Y : PASTE_Y + BACK_HEIGHT, PASTE_X : PASTE_X + BACK_WIDTH] = (
-            back_img
-        )
+        cropped = img[CROP_TOP : height - CROP_BOTTOM, CROP_LEFT : width - CROP_RIGHT]
 
         # -------------------------------------------------
         # CREATE OUTPUT FOLDER
@@ -212,16 +180,16 @@ for folder in tqdm(subfolders, desc="Processing", unit="folder"):
         # OUTPUT FILE
         # -------------------------------------------------
 
-        output_file = output_subfolder / "back.png"
+        output_image = output_subfolder / "back.png"
 
         # -------------------------------------------------
-        # SAVE OUTPUT
+        # SAVE IMAGE
         # -------------------------------------------------
 
-        success = cv2.imwrite(str(output_file), final_img)
+        success = cv2.imwrite(str(output_image), cropped)
 
         if not success:
-            tqdm.write(f"Failed saving : {output_file}")
+            tqdm.write(f"Failed saving : {output_image}")
 
             failed += 1
             continue
@@ -249,3 +217,4 @@ print(f"FAILED    : {failed}")
 print("=" * 70)
 
 input("\nPress ENTER to exit...")
+
